@@ -143,7 +143,7 @@ wd_warp()
         fi
     elif [[ ${points[$point]} != "" ]]
     then
-        cd ${points[$point]}
+        cd ${(e)points[$point]}
     else
         wd_exit_fail "Unknown warp point '${point}'"
     fi
@@ -169,7 +169,21 @@ wd_add()
     elif [[ ${points[$2]} == "" ]] || $force
     then
         wd_remove $point > /dev/null
-        printf "%q:%s\n" "${point}" "${PWD}" >> $WD_CONFIG
+
+        for set in "${(@k)WD_CONFIG_SET}"; do
+          # If a set's root matches the pwd then add it to the set. Exclude exact matches
+          if [[ -n $set ]] && [[ $PWD =~ "${(e)WD_CONFIG_SET[$set]}" ]] && [[ $PWD != "${(e)WD_CONFIG_SET[$set]}" ]]
+          then
+            local val=$(echo $PWD | sed "s:${(e)WD_CONFIG_SET[$set]}:$WD_CONFIG_SET[$set]:g")
+            printf "%q:%s\n" "${point}" "${val}" >> $WD_CONFIG.$set
+            unset point
+          fi
+        done
+
+        if [[ -n $point ]]
+        then
+          printf "%q:%s\n" "${point}" "${PWD}" >> $WD_CONFIG
+        fi
 
         wd_print_msg $WD_GREEN "Warp point added"
 
@@ -187,8 +201,8 @@ wd_remove()
 
     if [[ ${points[$point]} != "" ]]
     then
-        local config_tmp=$WD_CONFIG.tmp
-        if sed -n "/^${point}:.*$/!p" $WD_CONFIG > $config_tmp && mv $config_tmp $WD_CONFIG
+        local config_tmp=$config[$point].tmp
+        if sed -n "/^${point}:.*$/!p" $config[$point] > $config_tmp && mv $config_tmp $config[$point]
         then
             wd_print_msg $WD_GREEN "Warp point removed"
         else
@@ -217,6 +231,27 @@ wd_list_all()
             fi
         fi
     done <<< $(sed "s:${HOME}:~:g" $WD_CONFIG)
+
+    for set in "${(@k)WD_CONFIG_SET}"; do
+      if [[ -n $set ]]
+      then
+        while IFS= read -r line
+        do
+          if [[ $line != "" ]]
+          then
+            arr=(${(s,:,)line})
+            key=${arr[1]}
+            val=${arr[2]}
+
+            if [[ -z $wd_quiet_mode ]]
+            then
+              printf "%20s  ->  %s\n" $key $val
+            fi
+          fi
+        done <<< $(sed "s:${HOME}:~:g" $WD_CONFIG.$set)
+      fi
+    done
+
 }
 
 wd_ls()
@@ -278,7 +313,7 @@ wd_clean() {
             key=${arr[1]}
             val=${arr[2]}
 
-            if [ -d "$val" ]
+            if [ -d "${(e)val}" ]
             then
                 wd_tmp=$wd_tmp"\n"`echo $line`
             else
@@ -287,6 +322,29 @@ wd_clean() {
             fi
         fi
     done < $WD_CONFIG
+
+    for set in "${(@k)WD_CONFIG_SET}"; do
+      if [[ -n $set ]]
+      then
+        while read line
+        do
+          if [[ $line != "" ]]
+          then
+            arr=(${(s,:,)line})
+            key=${arr[1]}
+            val=${arr[2]}
+
+            if [ -d "${(e)val}" ]
+            then
+                wd_tmp=$wd_tmp"\n"`echo $line`
+            else
+                wd_print_msg $WD_YELLOW "Nonexistent directory: ${key} -> ${val}"
+                count=$((count+1))
+            fi
+          fi
+        done < $WD_CONFIG.$set
+      fi
+    done
 
     if [[ $count -eq 0 ]]
     then
@@ -333,9 +391,17 @@ then
     # if not, create config file
     touch $WD_CONFIG
 fi
+for set in "${(@k)WD_CONFIG_SET}"; do
+  if [[ -n $set ]] && [ ! -e $WD_CONFIG.$set ]
+  then
+      # if not, create config file
+     touch $WD_CONFIG.$set
+  fi
+done
 
 # load warp points
 typeset -A points
+typeset -A config
 while read -r line
 do
     arr=(${(s,:,)line})
@@ -343,7 +409,23 @@ do
     val=${arr[2]}
 
     points[$key]=$val
+    config[$key]=$WD_CONFIG
 done < $WD_CONFIG
+for set in "${(@k)WD_CONFIG_SET}"; do
+  if [[ -n $set ]]
+  then
+    while read -r line
+    do
+      arr=(${(s,:,)line})
+      key=${arr[1]}
+      val=${arr[2]}
+
+      points[$key]=$val
+      config[$key]=$WD_CONFIG.$set
+    done < $WD_CONFIG.$set
+  fi
+done
+
 
 # get opts
 args=$(getopt -o a:r:c:lhs -l add:,rm:,clean\!,list,ls:,path:,help,show -- $*)

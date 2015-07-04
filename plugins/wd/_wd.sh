@@ -16,6 +16,13 @@ function _wd() {
 
   warp_points=( "${(f)mapfile[$CONFIG]//$HOME/~}" )
 
+  for set in "${(@k)WD_CONFIG_SET}"; do
+    if [[ -n $set ]]; 
+    then
+      warp_points=( $warp_points "${(f)mapfile[$CONFIG.$set]//$HOME/~}" )
+    fi
+  done
+
   commands=(
     'add:Adds the current working directory to your warp points'
     'add!:Overwrites existing warp point'
