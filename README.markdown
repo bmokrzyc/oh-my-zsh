@@ -7,6 +7,9 @@
 - Added support for expansion of environment variables in paths
 - Modified the behavior to categorize warp points into sets match on root directories.  The matching is done against an environment variable ($WD_CONFIG_SET[$set]=$path), where path is matched against the added warp point.  This warp point is then placed in .warprc.$set.  Visibility of different sets is also controlled via $WD_CONFIG_SET, i.e. if a set is not define in the associative array then wd will not be aware of it.
 
+### autoenv
+- Assume activate.sh is in the users' $PATH instead of hard coded
+
 ### Themes
 
 - Added [bullet-train](https://github.com/caiogondim/bullet-train-oh-my-zsh-theme) 
